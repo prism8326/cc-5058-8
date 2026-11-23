@@ -1,0 +1,141 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.topbar {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 14px 24px;
+}
+.topbar h1 { margin: 0; font-size: 20px; }
+.topbar .sub { font-size: 13px; color: #94a3b8; margin-left: 12px; font-weight: 400; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+}
+.stage-col, .side-col { display: flex; flex-direction: column; gap: 16px; }
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+}
+.card h2 { margin: 0 0 10px; font-size: 15px; color: #1e293b; }
+.card h3 { margin: 0 0 8px; font-size: 13px; }
+
+#stage {
+  width: 100%;
+  height: auto;
+  background: #fbfdff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: block;
+  cursor: crosshair;
+}
+.hint { font-size: 12px; color: #64748b; line-height: 1.6; margin: 8px 0 0; }
+
+/* 结果区 */
+.result {
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid;
+}
+.result.idle { background: #f8fafc; border-color: #cbd5e1; }
+.result.ok { background: #f0fdf4; border-color: #86efac; }
+.result.fail { background: #fef2f2; border-color: #fca5a5; }
+.result #resultHead { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.result.ok #resultHead { color: #15803d; }
+.result.fail #resultHead { color: #b91c1c; }
+.result #resultDetail { font-size: 13px; color: #334155; }
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.kv-grid > div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kv-grid span { font-size: 11px; color: #64748b; }
+.kv-grid b { font-size: 13px; }
+
+/* 控件 */
+.steps { margin: 0 0 12px; padding-left: 18px; font-size: 12.5px; line-height: 1.8; color: #334155; }
+.row { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.row label { font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; color: #475569; }
+.row label.check { flex-direction: row; align-items: center; gap: 5px; }
+select, input[type="range"] { font-size: 13px; }
+select { padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 13px;
+  cursor: pointer;
+  color: #0f172a;
+}
+button:hover:not(:disabled) { background: #e2e8f0; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+button.primary:hover:not(:disabled) { background: #1d4ed8; }
+button.warn { background: #fff7ed; border-color: #fdba74; color: #c2410c; }
+
+.agent-block { border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.ag-A-bg { background: #eff6ff; border: 1px solid #bfdbfe; }
+.ag-B-bg { background: #fffbeb; border: 1px solid #fde68a; }
+.mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mini-grid button { font-size: 12px; padding: 6px 4px; }
+
+/* 调试表 */
+.debug-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11.5px; }
+.debug-table th, .debug-table td {
+  border: 1px solid #e2e8f0;
+  padding: 5px 6px;
+  text-align: center;
+}
+.debug-table th { background: #f8fafc; color: #475569; font-weight: 600; }
+.ag-A { color: #1d4ed8; font-weight: 700; }
+.ag-B { color: #b45309; font-weight: 700; }
+
+/* 日志 */
+.log {
+  height: 240px;
+  overflow-y: auto;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.log-line { color: #cbd5e1; white-space: nowrap; }
+.log-line.ok { color: #86efac; }
+.log-line.ev { color: #93c5fd; }
+.log-line.phase { color: #c4b5fd; }
+.log-line.strong { color: #fde047; font-weight: 700; }
+.log-line.warn { color: #fdba74; }
+.log-line.fail { color: #fca5a5; font-weight: 700; }
+.log-line.msg { color: #7dd3fc; }
+
+@media (max-width: 1200px) {
+  .layout { grid-template-columns: 1fr; }
+}

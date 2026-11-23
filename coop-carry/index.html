@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双角色联合搬运动作模块 · Coop Carry</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>双角色联合搬运 <span class="sub">显式协议 · 真实姿态 · 共享道具共同确认</span></h1>
+</header>
+
+<main class="layout">
+  <!-- 左：场景 -->
+  <section class="stage-col">
+    <div class="card">
+      <canvas id="stage" width="880" height="560"></canvas>
+      <p class="hint">
+        虚线圆为两名角色的接触点足迹（绿色=姿态满足）；蓝/橙虚线为各自接近路径；
+        可在道具<b>落地时</b>用鼠标拖动它模拟“外部移动”；抬起后必须双方共同施力才会移动。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>结果区（联合动作与占用状态）</h2>
+      <div id="result" class="result idle">
+        <div id="resultHead">就绪</div>
+        <div id="resultDetail">选择角色作为发起方，点击“发起协作”开始联合搬运</div>
+      </div>
+      <div class="kv-grid">
+        <div><span>目的地占用</span><b id="occValue">空闲</b></div>
+        <div><span>道具坐标</span><b id="propPosValue">-</b></div>
+        <div><span>剩余空间裁决</span><b id="fitValue">-</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右：控件与调试 -->
+  <aside class="side-col">
+    <div class="card">
+      <h2>怎样启动（界面操作）</h2>
+      <ol class="steps">
+        <li>在下方“测试案例”选择场景（默认标准协作）。</li>
+        <li>在“发起方”选择角色 A 或 B。</li>
+        <li>点击 <b>发起协作</b>：两名角色按各自路径接近接触点。</li>
+        <li>自动模式下，双方真实就位 → READY → COMMIT → FORCE → 搬运 → RELEASE 自动推进；
+          取消勾选可手动逐协议按钮驱动。</li>
+        <li>观察结果区与调试视图；任何协议拒绝/失败都会回显。</li>
+      </ol>
+      <div class="row">
+        <label>测试案例
+          <select id="scenarioSelect"></select>
+        </label>
+        <label>发起方
+          <select id="leaderSelect">
+            <option value="A">角色 A（蓝）</option>
+            <option value="B">角色 B（橙）</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="autoToggle" checked> 自动驱动协议</label>
+        <label class="check"><input type="checkbox" id="dupToggle"> 注入重复消息</label>
+      </div>
+      <div class="row">
+        <label>消息延迟 <span id="delayValue">0</span> tick
+          <input type="range" id="delayRange" min="0" max="40" value="0">
+        </label>
+      </div>
+      <div class="btn-grid">
+        <button id="btnStart" class="primary">发起协作</button>
+        <button id="btnSolo" class="warn">单方强抬（应拒绝）</button>
+        <button id="btnExternal">外部移动道具</button>
+        <button id="btnAbort">主动中止</button>
+        <button id="btnReset">复位</button>
+      </div>
+    </div>
+
+    <div class="card" id="manualCard">
+      <h2>手动协议控件（按角色，逐阶段）</h2>
+      <div class="agent-block ag-A-bg">
+        <h3>角色 A</h3>
+        <div class="mini-grid">
+          <button id="btnApproachA">接近</button>
+          <button id="btnReadyA">READY 就位</button>
+          <button id="btnCommitA">COMMIT 承诺</button>
+          <button id="btnForceA">FORCE 施力</button>
+          <button id="btnReleaseA">RELEASE 松开</button>
+          <button id="btnDetachA" class="warn">注入脱离</button>
+          <button id="btnReattachA">重新握住</button>
+        </div>
+      </div>
+      <div class="agent-block ag-B-bg">
+        <h3>角色 B</h3>
+        <div class="mini-grid">
+          <button id="btnApproachB">接近</button>
+          <button id="btnReadyB">READY 就位</button>
+          <button id="btnCommitB">COMMIT 承诺</button>
+          <button id="btnForceB">FORCE 施力</button>
+          <button id="btnReleaseB">RELEASE 松开</button>
+          <button id="btnDetachB" class="warn">注入脱离</button>
+          <button id="btnReattachB">重新握住</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>调试视图：参与者各自知道的阶段</h2>
+      <div class="kv-grid">
+        <div><span>内核阶段</span><b id="phaseValue">IDLE</b></div>
+        <div><span>epoch</span><b id="epochValue">0</b></div>
+        <div><span>道具状态</span><b id="propValue">GROUNDED</b></div>
+        <div><span>消息队列</span><b id="busValue">0</b></div>
+        <div><span>tick</span><b id="tickValue">0</b></div>
+      </div>
+      <table class="debug-table">
+        <thead>
+          <tr><th>角色</th><th>认知阶段</th><th>认知道具</th><th>R/C/F/L</th><th>支撑</th><th>真实姿态</th><th>最后消息</th></tr>
+        </thead>
+        <tbody id="debugRows"></tbody>
+      </table>
+      <p class="hint">R/C/F/L = READY / COMMIT / FORCE / RELEASE 协议位。认知阶段可能因消息延迟而暂时落后于内核阶段。</p>
+    </div>
+
+    <div class="card">
+      <h2>协调消息日志</h2>
+      <div id="log" class="log"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="js/kernel.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
