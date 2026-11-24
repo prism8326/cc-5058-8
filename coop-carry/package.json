@@ -1,0 +1,10 @@
+{
+  "name": "coop-carry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "双角色联合搬运动作模块：显式协议、真实姿态、共享道具共同确认",
+  "scripts": {
+    "test": "node tests/kernel.test.js && node tests/scene.smoke.js && node tests/cancel.trajectory.test.js && node tests/event.walker.test.js && node tests/coop.acceptance.test.js && node tests/ui.wiring.test.js && node tests/ui.drag.test.js && node tests/ui.flow.test.js && node tests/cli.helper.test.js",
+    "cli": "node tools/coop-cli.js"
+  }
+}

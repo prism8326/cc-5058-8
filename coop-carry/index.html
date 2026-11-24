@@ -68,9 +68,15 @@
           <input type="range" id="delayRange" min="0" max="40" value="0">
         </label>
       </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="shelfToggle">
+          取消推迟到货架撤走后（否则在“刚握住把手”时取消）</label>
+      </div>
       <div class="btn-grid">
         <button id="btnStart" class="primary">发起协作</button>
+        <button id="btnJointCarry" class="primary">联合搬运（图形入口）</button>
         <button id="btnSolo" class="warn">单方强抬（应拒绝）</button>
+        <button id="btnCancel" class="warn">取消（请求+回执）</button>
         <button id="btnExternal">外部移动道具</button>
         <button id="btnAbort">主动中止</button>
         <button id="btnReset">复位</button>
@@ -121,6 +127,15 @@
         <tbody id="debugRows"></tbody>
       </table>
       <p class="hint">R/C/F/L = READY / COMMIT / FORCE / RELEASE 协议位。认知阶段可能因消息延迟而暂时落后于内核阶段。</p>
+    </div>
+
+    <div class="card">
+      <h2>物件支撑面与独立判据</h2>
+      <div id="physValue" class="kv-line">-</div>
+      <div id="ownershipValue" class="kv-line">尚未发生物权转移</div>
+      <div id="auditValue" class="kv-line ok-text">无异常</div>
+      <p class="hint">以上直接读取内核物理事实（支撑面、握点载荷、物权），并运行独立不变量审计；
+        不以阶段字符串自证，任一项坏结果都会在此暴露。</p>
     </div>
 
     <div class="card">

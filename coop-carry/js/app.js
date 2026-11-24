@@ -6,11 +6,18 @@
   'use strict';
 
   const $ = id => document.getElementById(id);
-  const { CoopKernel, Phase } = CoopCarry;
+  const { CoopKernel, Phase, Support, Ownership } = CoopCarry;
   const SCENIOS = CarryScene.SCENIOS;
 
   const scene = new CarryScene($('stage'));
   const kernel = new CoopKernel(scene, { prepWindow: 900, commitWindow: 600, recoverTimeout: 480 });
+  // UI 只展示内核物理事实；货架在场与否由内核裁决，再回灌给场景渲染
+  kernel.on((type) => {
+    if (type === 'shelf:change' || type === 'lift:done' || type === 'prop:state' ||
+        type === 'cancel:done' || type === 'attempt:failed' || type === 'ownership:change') {
+      scene.setShelfPresent(kernel.shelfPresent);
+    }
+  });
 
   const state = {
     auto: true,
@@ -61,6 +68,30 @@
       case 'prop:state': log(`道具状态 -> ${d.state}`, 'phase'); break;
       case 'support:lost':
         log(`角色 ${d.agent} 失去支撑（${d.reason}），启动裁决`, 'warn');
+        break;
+      case 'cancel:request':
+        log(`角色 ${d.by} 发起取消（请求 + 回执握手）`, 'warn');
+        break;
+      case 'cancel:receipt':
+        log(`取消回执到达：${d.by} 已松手`, 'msg');
+        break;
+      case 'cancel:hold':
+        log(`取消进行中：${d.awaiting} 仍承重，道具保持 LIFTED（未单方脱手掉落）`, 'warn');
+        break;
+      case 'cancel:done':
+        log(d.shelfLoaded
+          ? `取消完成：双方松手但重量仍由货架承担（${d.result}）`
+          : `取消完成：${d.result}，道具由双人共同放下`, 'strong');
+        showResult(d.shelfLoaded ? '取消（货架承重）' : '取消（双人放下）',
+          d.shelfLoaded
+            ? '两人刚握住把手即取消：道具未落地，重量仍由货架承担'
+            : '货架已撤走：同一份回执触发双人共同放下', d.shelfLoaded);
+        break;
+      case 'ownership:change':
+        log(`物权 ${d.from} -> ${d.to}（${d.reason}）`, 'phase');
+        break;
+      case 'audit:error':
+        log(`审计异常 [${d.code}] ${d.detail}`, 'fail');
         break;
       case 'arbitration':
         log(`裁决：${d.verdict} —— ${d.detail}`, 'warn');
@@ -118,8 +149,29 @@
       kernel.loseSupport(d.agent, '接触点姿态脱离');
     } else if (type === 'prop:dragged') {
       kernel.externalMove({ x: Math.round(d.x), y: Math.round(d.y) });
+    } else if (type === 'cancel:requested') {
+      requestCancelFromUi();
     }
   });
+
+  /* 拖动取消事件：把撤销时点交给测试台的“货架状态”开关。
+   * 货架仍在 -> 双方刚握住把手时取消；已撤走 -> 推迟到货架撤走后取消。 */
+  function requestCancelFromUi() {
+    if (kernel.phase === Phase.DONE || kernel.phase === Phase.ABORTED || kernel.phase === Phase.IDLE) {
+      log('当前无可取消的联合动作', 'warn');
+      return;
+    }
+    const by = selectedLeader();
+    const shelf = $('shelfToggle').checked ? 'removed' : 'present';
+    if (shelf === 'removed' && kernel.shelfPresent) {
+      // 让测试台把撤销时点推到货架撤走之后：先撤货架再取消
+      kernel.setShelf(false);
+      scene.setShelfPresent(false);
+    }
+    log(`拖动触发取消：撤销时点 = ${shelf === 'removed' ? '货架已撤走' : '货架仍在（刚握住把手）'}`,
+      'ev');
+    kernel.requestCancel(by);
+  }
 
   /* ---------------- 自动驱动：场景状态满足协议条件才推进，绝不替代姿态检查 ---------------- */
   function autoDrive() {
@@ -175,6 +227,40 @@
       `(${Math.round(scene.prop.x)}, ${Math.round(scene.prop.y)})`;
     $('fitValue').textContent = scene.canPlaceHere(scene.prop.x, scene.prop.y)
       ? '当前位置可放下' : '当前位置无剩余空间';
+
+    // 物件支撑面与握点载荷：直接读内核物理事实，不用固定数据
+    const pose = kernel.propPose();
+    const el = $('physValue');
+    if (el) {
+      const supportLabel = {
+        SHELF: '货架', PAIR: '双握点', SINGLE: '单握点', GROUND: '地面',
+      }[pose.support] || pose.support;
+      const ownLabel = {
+        SHELF: '货架', PAIR: '双人', GROUND: '地面',
+      }[pose.ownership] || pose.ownership;
+      el.innerHTML = `支撑面：<b>${supportLabel}</b> · 物权：<b>${ownLabel}</b> · ` +
+        `载荷 A=<b>${pose.loads.A.toFixed(2)}</b> B=<b>${pose.loads.B.toFixed(2)}</b>` +
+        ` · 货架${pose.shelfPresent ? '在场' : '已撤走'}`;
+    }
+    const audit = kernel.auditInvariants();
+    const auditEl = $('auditValue');
+    if (auditEl) {
+      if (audit.length === 0) {
+        auditEl.textContent = '无异常：道具仅被合法阶段驱动，支撑/载荷/物权一致';
+        auditEl.className = 'ok-text';
+      } else {
+        auditEl.textContent = audit.map(p => `[${p.code}] ${p.detail}`).join('；');
+        auditEl.className = 'fail-text';
+      }
+    }
+    const ownEl = $('ownershipValue');
+    if (ownEl) {
+      const transfers = kernel.ownershipLog.filter(e => e.to === 'PAIR');
+      ownEl.textContent = transfers.length === 0
+        ? '尚未发生物权转移'
+        : `SHELF->PAIR 共 ${transfers.length} 次` +
+          (transfers.length === 1 ? '（每 epoch 至多一次）' : '（异常：应至多一次）');
+    }
   }
 
   /* ---------------- 控件启用/禁用由内核阶段驱动 ---------------- */
@@ -183,8 +269,10 @@
     const idle = ph === Phase.IDLE;
     const doneLike = ph === Phase.DONE || ph === Phase.ABORTED;
     $('btnStart').disabled = !idle;
+    $('btnJointCarry').disabled = !(idle || doneLike);
     $('btnSolo').disabled = !(ph === Phase.PREPARING || ph === Phase.IDLE);
     $('btnAbort').disabled = idle || doneLike;
+    $('btnCancel').disabled = idle || doneLike;
     $('btnExternal').disabled = ph === Phase.DONE || ph === Phase.ABORTED;
     const manual = !state.auto;
     for (const a of ['A', 'B']) {
@@ -242,6 +330,28 @@
 
   $('btnAbort').addEventListener('click', () => kernel.abort(selectedLeader(), '手动中止'));
 
+  $('btnCancel').addEventListener('click', () => requestCancelFromUi());
+
+  // 联合搬运图形入口：按钮直接调用内核 start/协作，不得用固定数据冒充
+  $('btnJointCarry').addEventListener('click', () => {
+    if (kernel.phase !== Phase.IDLE && kernel.phase !== Phase.DONE &&
+        kernel.phase !== Phase.ABORTED) {
+      log('联合搬运：当前已有动作在进行，先复位或等待结束', 'warn');
+      return;
+    }
+    // 复位任何残留，再以“手动选择角色”为发起方，经真实协议入口启动
+    if (kernel.phase === Phase.DONE || kernel.phase === Phase.ABORTED) fullReset();
+    const leader = selectedLeader();
+    const r = kernel.start(leader);
+    if (r.ok) {
+      scene._notifyArrived = { A: false, B: false };
+      scene.beginApproach('A');
+      scene.beginApproach('B');
+      log(`联合搬运：由界面按钮发起（发起方 ${leader}，epoch=${r.epoch}）`, 'strong');
+      showResult('联合搬运进行中', `发起方 ${leader}：正在按真实协议推进`, null);
+    }
+  });
+
   $('btnExternal').addEventListener('click', () => {
     const nx = Math.min(scene.W - 60, scene.prop.x + 90);
     scene.prop.x = nx;
@@ -254,6 +364,15 @@
   $('autoToggle').addEventListener('change', e => {
     state.auto = e.target.checked;
     log(`模式切换：${state.auto ? '自动（满足姿态即推进协议）' : '手动（逐协议按钮驱动）'}`, 'ev');
+  });
+
+  // 货架开关：决定拖动取消的撤销时点是“刚握住把手”还是“货架已撤走”
+  $('shelfToggle').addEventListener('change', e => {
+    kernel.setShelf(!e.target.checked);
+    scene.setShelfPresent(!e.target.checked);
+    log(e.target.checked
+      ? '测试台：取消将推迟到货架已撤走之后'
+      : '测试台：取消发生在两人刚握住把手时（货架仍在承重）', 'ev');
   });
 
   $('delayRange').addEventListener('input', e => {
@@ -284,6 +403,8 @@
     kernel.reset();
     scene.clearFaults();
     scene.reset();
+    scene.setShelfPresent(kernel.shelfPresent);
+    $('shelfToggle').checked = false;
     refreshControls();
     renderDebug();
     log('系统复位', 'ev');

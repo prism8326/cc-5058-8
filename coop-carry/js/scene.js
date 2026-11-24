@@ -30,6 +30,7 @@
       this.W = canvas.width;
       this.H = canvas.height;
       this.eventHandlers = new Set();
+      this.shelfPresent = true;          // 货架是否在承托道具（与内核物理事实同步）
       this._bindMouse();
       this.applyScenario(CarryScene.SCENIOS.balanced);
     }
@@ -109,6 +110,7 @@
       this.rollbackDone = false;
       this.faults = { A: null, B: null }; // 'detach' | 'stuck'
       this.dragInfo = null;
+      this.shelfPresent = true;
       this._notifyArrived = { A: false, B: false };
     }
 
@@ -230,6 +232,9 @@
       this.prop.grounded = true;
       for (const id of ['A', 'B']) this.agents[id].mode = 'IDLE';
     }
+
+    /* 货架是否在承托道具：由内核物理事实驱动，仅影响渲染 */
+    setShelfPresent(present) { this.shelfPresent = !!present; }
 
     /* ---------------- 角色行为控制（由控件驱动） ---------------- */
     beginApproach(id) {
@@ -369,7 +374,7 @@
       }
     }
 
-    /* ---------------- 鼠标外部拖动道具 ---------------- */
+    /* ---------------- 鼠标拖动：道具落地时=外部移动；握住阶段=拖动取消事件 ---------------- */
     _bindMouse() {
       const pos = e => {
         const r = this.canvas.getBoundingClientRect();
@@ -379,21 +384,39 @@
       this.canvas.addEventListener('mousedown', e => {
         const p = pos(e);
         const fp = this.footprintRect(this.prop);
-        if (this.prop.grounded && this.rectsOverlap(fp, { x: p.x, y: p.y, w: 1, h: 1 })) {
-          this.dragInfo = { dx: this.prop.x - p.x, dy: this.prop.y - p.y };
-        }
+        this.dragInfo = null;
+        // 握点/把手命中优先：即使点在道具足迹之外也识别为取消事件
+        const onGrip = ['A', 'B'].some(id => {
+          const g = this.gripPoint(id, this.prop);
+          return Math.hypot(g.x - p.x, g.y - p.y) <= AGENT_R + 10;
+        });
+        const onProp = this.rectsOverlap(fp, { x: p.x, y: p.y, w: 1, h: 1 });
+        if (!onGrip && !onProp) return;
+        this.dragInfo = {
+          dx: this.prop.x - p.x,
+          dy: this.prop.y - p.y,
+          mode: onGrip ? 'cancel' : 'move',
+          startX: this.prop.x,
+          startY: this.prop.y,
+        };
+        this.emit('drag:start', { mode: this.dragInfo.mode });
       });
       this.canvas.addEventListener('mousemove', e => {
-        if (!this.dragInfo) return;
+        if (!this.dragInfo || this.dragInfo.mode !== 'move') return;
         const p = pos(e);
         this.prop.x = p.x + this.dragInfo.dx;
         this.prop.y = p.y + this.dragInfo.dy;
       });
       this.canvas.addEventListener('mouseup', () => {
-        if (this.dragInfo) {
-          this.dragInfo = null;
-          this.emit('prop:dragged', { x: this.prop.x, y: this.prop.y });
+        if (!this.dragInfo) return;
+        const info = this.dragInfo;
+        this.dragInfo = null;
+        if (info.mode === 'cancel') {
+          // 拖动取消事件：不搬动道具，交给应用层决定在什么时点撤销
+          this.emit('cancel:requested', { via: 'drag' });
+          return;
         }
+        this.emit('prop:dragged', { x: this.prop.x, y: this.prop.y });
       });
     }
 
@@ -406,6 +429,7 @@
       this._drawPaths();
       this._drawFootprints(phase);
       for (const o of this.obstacles) this._drawObstacle(o);
+      this._drawShelf(propState);
       this._drawProp(propState);
       this._drawContactRays(phase);
       this._drawAgent('A');
@@ -491,6 +515,30 @@
       ctx.fillRect(o.x, o.y, o.w, o.h);
       ctx.strokeStyle = '#1e293b';
       ctx.strokeRect(o.x, o.y, o.w, o.h);
+    }
+
+    /* 货架承托：在场时道具重量由它承担；撤走后双握点承重 */
+    _drawShelf(propState) {
+      if (!this.shelfPresent) return;
+      const ctx = this.ctx;
+      const p = this.prop;
+      const halfW = this.propW / 2 + 14;
+      ctx.save();
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.fillStyle = 'rgba(14,165,233,0.08)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(p.x - halfW, p.y + this.propH / 2 + 12);
+      ctx.lineTo(p.x + halfW, p.y + this.propH / 2 + 12);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillRect(p.x - halfW, p.y + this.propH / 2 + 12, halfW * 2, 8);
+      ctx.fillStyle = '#0369a1';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('货架承托（重量在货架）', p.x, p.y + this.propH / 2 + 34);
+      ctx.restore();
     }
 
     _drawProp(propState) {
